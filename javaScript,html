@@ -1,0 +1,643 @@
+<script>
+// ===============================================
+// SISTEMA POS - HELADERÍA BREAK BACK
+// JavaScript Principal
+// ===============================================
+
+// Variables Globales
+let productos = [];
+let categorias = [];
+let carrito = [];
+let metodoPagoSeleccionado = 'Efectivo';
+let numeroFacturaActual = '';
+
+// ===============================================
+// INICIALIZACIÓN
+// ===============================================
+
+document.addEventListener('DOMContentLoaded', function() {
+  inicializarApp();
+});
+
+function inicializarApp() {
+  actualizarReloj();
+  setInterval(actualizarReloj, 1000);
+  cargarProductos();
+  cargarCategorias();
+  obtenerNumeroFactura();
+  setTimeout(() => {
+    document.getElementById('loader').classList.add('hidden');
+  }, 2000);
+}
+
+function actualizarReloj() {
+  const now = new Date();
+  const options = { hour: '2-digit', minute: '2-digit', second: '2-digit' };
+  document.getElementById('currentTime').textContent = now.toLocaleTimeString('es-CO', options);
+}
+
+// ===============================================
+// CARGA DE DATOS
+// ===============================================
+
+function cargarProductos() {
+  google.script.run
+    .withSuccessHandler(function(data) {
+      productos = data || [];
+      renderizarProductos(productos);
+      renderizarTablaProductos();
+    })
+    .withFailureHandler(function(error) {
+      console.error('Error cargando productos:', error);
+      mostrarToast('Error al cargar productos', 'error');
+    })
+    .getProductos();
+}
+
+function cargarCategorias() {
+  google.script.run
+    .withSuccessHandler(function(data) {
+      categorias = data || ['Helados', 'Bebidas', 'Postres', 'Toppings', 'Otros'];
+      renderizarCategorias();
+    })
+    .withFailureHandler(function(error) {
+      console.error('Error cargando categorías:', error);
+    })
+    .getCategorias();
+}
+
+function obtenerNumeroFactura() {
+  google.script.run
+    .withSuccessHandler(function(numero) {
+      numeroFacturaActual = numero;
+      document.getElementById('facturaNumero').textContent = numero;
+    })
+    .withFailureHandler(function(error) {
+      console.error('Error obteniendo número de factura:', error);
+    })
+    .getSiguienteNumeroFactura();
+}
+
+// ===============================================
+// RENDERIZADO DE PRODUCTOS
+// ===============================================
+
+function renderizarProductos(productosArray) {
+  const grid = document.getElementById('productsGrid');
+  
+  if (!productosArray || productosArray.length === 0) {
+    grid.innerHTML = '<div class="products-empty" style="grid-column:1/-1;text-align:center;padding:60px;"><span class="material-icons-round" style="font-size:80px;color:var(--primary-light);">icecream</span><p style="margin-top:15px;color:var(--text-secondary);">No hay productos disponibles</p></div>';
+    return;
+  }
+  
+  grid.innerHTML = productosArray.map(producto => {
+    const stockClass = producto.stock <= 0 ? 'out' : producto.stock <= 5 ? 'low' : '';
+    const stockText = producto.stock <= 0 ? 'Agotado' : 'Stock: ' + producto.stock;
+    const disabled = producto.stock <= 0 ? 'style="opacity:0.5;pointer-events:none;"' : '';
+    
+    // Verificar si es URL de imagen o emoji
+    const imagen = producto.imagen || '🍨';
+    const esURL = imagen.startsWith('http') || imagen.startsWith('https');
+    const imagenHTML = esURL 
+      ? '<img class="product-img" src="' + imagen + '" alt="' + producto.nombre + '" onerror="this.outerHTML=\'<span class=product-emoji>🍨</span>\'">'
+      : '<span class="product-emoji">' + imagen + '</span>';
+    
+    return '<div class="product-card" onclick="agregarAlCarrito(' + producto.id + ')" ' + disabled + '>' +
+      imagenHTML +
+      '<p class="product-name">' + producto.nombre + '</p>' +
+      '<span class="product-category">' + producto.categoria + '</span>' +
+      '<p class="product-price">' + formatearMoneda(producto.precio) + '</p>' +
+      '<span class="product-stock ' + stockClass + '">' + stockText + '</span>' +
+    '</div>';
+  }).join('');
+}
+
+function renderizarCategorias() {
+  const container = document.getElementById('categoriesContainer');
+  const iconos = {
+    'Helados': 'icecream',
+    'Bebidas': 'local_cafe',
+    'Postres': 'cake',
+    'Toppings': 'stars',
+    'Otros': 'category'
+  };
+  
+  let html = '<button class="category-btn active" data-category="todos" onclick="filtrarCategoria(\'todos\')"><span class="material-icons-round">apps</span><span>Todos</span></button>';
+  
+  categorias.forEach(cat => {
+    const icono = iconos[cat] || 'category';
+    html += '<button class="category-btn" data-category="' + cat + '" onclick="filtrarCategoria(\'' + cat + '\')"><span class="material-icons-round">' + icono + '</span><span>' + cat + '</span></button>';
+  });
+  
+  container.innerHTML = html;
+}
+
+function renderizarTablaProductos() {
+  const tbody = document.getElementById('productosBody');
+  
+  if (!productos || productos.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;">No hay productos registrados</td></tr>';
+    return;
+  }
+  
+  tbody.innerHTML = productos.map(p => {
+    return '<tr>' +
+      '<td>' + p.id + '</td>' +
+      '<td><strong>' + p.nombre + '</strong></td>' +
+      '<td>' + p.sku + '</td>' +
+      '<td>' + p.categoria + '</td>' +
+      '<td>' + formatearMoneda(p.precio) + '</td>' +
+      '<td>' + p.stock + '</td>' +
+    '</tr>';
+  }).join('');
+}
+
+// ===============================================
+// BÚSQUEDA Y FILTROS
+// ===============================================
+
+function filtrarProductos() {
+  const termino = document.getElementById('searchInput').value.toLowerCase();
+  const productosFiltrados = productos.filter(p => 
+    p.nombre.toLowerCase().includes(termino) ||
+    p.sku.toLowerCase().includes(termino) ||
+    p.categoria.toLowerCase().includes(termino)
+  );
+  renderizarProductos(productosFiltrados);
+}
+
+function limpiarBusqueda() {
+  document.getElementById('searchInput').value = '';
+  renderizarProductos(productos);
+}
+
+function filtrarCategoria(categoria) {
+  document.querySelectorAll('.category-btn').forEach(btn => {
+    btn.classList.remove('active');
+    if (btn.dataset.category === categoria) {
+      btn.classList.add('active');
+    }
+  });
+  
+  if (categoria === 'todos') {
+    renderizarProductos(productos);
+  } else {
+    const filtrados = productos.filter(p => p.categoria === categoria);
+    renderizarProductos(filtrados);
+  }
+}
+
+function escanearSKU(event) {
+  if (event.key === 'Enter') {
+    const sku = document.getElementById('skuInput').value.trim();
+    if (sku) {
+      google.script.run
+        .withSuccessHandler(function(producto) {
+          if (producto) {
+            agregarAlCarritoDirecto(producto);
+            document.getElementById('skuInput').value = '';
+          } else {
+            mostrarToast('Producto no encontrado', 'warning');
+          }
+        })
+        .buscarPorSKU(sku);
+    }
+  }
+}
+
+// ===============================================
+// CARRITO DE COMPRAS
+// ===============================================
+
+function agregarAlCarrito(productoId) {
+  const producto = productos.find(p => p.id === productoId);
+  if (!producto) return;
+  agregarAlCarritoDirecto(producto);
+}
+
+function agregarAlCarritoDirecto(producto) {
+  const existente = carrito.find(item => item.id === producto.id);
+  
+  if (existente) {
+    if (existente.cantidad < producto.stock) {
+      existente.cantidad++;
+      mostrarToast(producto.nombre + ' +1', 'success');
+    } else {
+      mostrarToast('Stock insuficiente', 'warning');
+      return;
+    }
+  } else {
+    carrito.push({
+      id: producto.id,
+      nombre: producto.nombre,
+      sku: producto.sku,
+      precio: producto.precio,
+      imagen: producto.imagen || '🍨',
+      cantidad: 1
+    });
+    mostrarToast(producto.nombre + ' agregado', 'success');
+  }
+  
+  renderizarCarrito();
+  actualizarTotales();
+}
+
+function renderizarCarrito() {
+  const container = document.getElementById('cartItems');
+  
+  if (carrito.length === 0) {
+    container.innerHTML = '<div class="cart-empty"><span class="material-icons-round">shopping_basket</span><p>El carrito está vacío</p><span>Agrega productos para comenzar</span></div>';
+    document.getElementById('btnCheckout').disabled = true;
+    return;
+  }
+  
+  document.getElementById('btnCheckout').disabled = false;
+  
+  container.innerHTML = carrito.map((item, index) => {
+    const subtotal = item.precio * item.cantidad;
+    
+    // Verificar si es URL de imagen o emoji
+    const imagen = item.imagen || '🍨';
+    const esURL = imagen.startsWith('http') || imagen.startsWith('https');
+    const imagenHTML = esURL 
+      ? '<img class="cart-item-img" src="' + imagen + '" alt="' + item.nombre + '" onerror="this.outerHTML=\'<span class=cart-item-emoji>🍨</span>\'">'
+      : '<span class="cart-item-emoji">' + imagen + '</span>';
+    
+    return '<div class="cart-item">' +
+      imagenHTML +
+      '<div class="cart-item-info">' +
+        '<p class="cart-item-name">' + item.nombre + '</p>' +
+        '<p class="cart-item-price">' + formatearMoneda(item.precio) + '</p>' +
+      '</div>' +
+      '<div class="cart-item-quantity">' +
+        '<button class="qty-btn minus" onclick="cambiarCantidad(' + index + ', -1)">-</button>' +
+        '<span class="cart-item-qty">' + item.cantidad + '</span>' +
+        '<button class="qty-btn plus" onclick="cambiarCantidad(' + index + ', 1)">+</button>' +
+      '</div>' +
+      '<span class="cart-item-subtotal">' + formatearMoneda(subtotal) + '</span>' +
+      '<button class="cart-item-remove" onclick="eliminarDelCarrito(' + index + ')"><span class="material-icons-round">close</span></button>' +
+    '</div>';
+  }).join('');
+}
+
+function cambiarCantidad(index, delta) {
+  const item = carrito[index];
+  const producto = productos.find(p => p.id === item.id);
+  
+  item.cantidad += delta;
+  
+  if (item.cantidad <= 0) {
+    carrito.splice(index, 1);
+  } else if (producto && item.cantidad > producto.stock) {
+    item.cantidad = producto.stock;
+    mostrarToast('Stock máximo alcanzado', 'warning');
+  }
+  
+  renderizarCarrito();
+  actualizarTotales();
+}
+
+function eliminarDelCarrito(index) {
+  carrito.splice(index, 1);
+  renderizarCarrito();
+  actualizarTotales();
+}
+
+function limpiarCarrito() {
+  if (carrito.length > 0 && confirm('¿Vaciar el carrito?')) {
+    carrito = [];
+    renderizarCarrito();
+    actualizarTotales();
+  }
+}
+
+function actualizarTotales() {
+  const subtotal = carrito.reduce((sum, item) => sum + (item.precio * item.cantidad), 0);
+  const total = subtotal;
+  
+  document.getElementById('subtotal').textContent = formatearMoneda(subtotal);
+  document.getElementById('total').textContent = formatearMoneda(total);
+}
+
+// ===============================================
+// MODAL DE PAGO
+// ===============================================
+
+function abrirModalPago() {
+  if (carrito.length === 0) return;
+  
+  obtenerNumeroFactura();
+  
+  const subtotal = carrito.reduce((sum, item) => sum + (item.precio * item.cantidad), 0);
+  const total = subtotal;
+  
+  document.getElementById('facturaSubtotal').textContent = formatearMoneda(subtotal);
+  document.getElementById('facturaTotal').textContent = formatearMoneda(total);
+  document.getElementById('pagoTotal').value = formatearMoneda(total);
+  document.getElementById('pagoRecibido').value = '';
+  document.getElementById('pagoDevuelta').value = '$0';
+  document.getElementById('nombreCliente').value = '';
+  
+  const itemsContainer = document.getElementById('facturaItems');
+  itemsContainer.innerHTML = carrito.map(item => {
+    return '<div class="factura-item">' +
+      '<span class="factura-item-name">' + item.nombre + '</span>' +
+      '<span class="factura-item-qty">x' + item.cantidad + '</span>' +
+      '<span>' + formatearMoneda(item.precio * item.cantidad) + '</span>' +
+    '</div>';
+  }).join('');
+  
+  generarBotonesPagoRapido(total);
+  
+  document.getElementById('modalPago').classList.add('active');
+}
+
+function cerrarModalPago() {
+  document.getElementById('modalPago').classList.remove('active');
+}
+
+function seleccionarMetodo(metodo) {
+  metodoPagoSeleccionado = metodo;
+  document.querySelectorAll('.metodo-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.metodo === metodo);
+  });
+  
+  const pagoRapido = document.getElementById('pagoRapido');
+  pagoRapido.style.display = metodo === 'Efectivo' ? 'block' : 'none';
+  
+  if (metodo === 'Nequi') {
+    const total = carrito.reduce((sum, item) => sum + (item.precio * item.cantidad), 0);
+    document.getElementById('pagoRecibido').value = total;
+    calcularDevuelta();
+  }
+}
+
+function generarBotonesPagoRapido(total) {
+  const container = document.getElementById('pagoRapidoBtns');
+  const valores = [total];
+  
+  const redondeos = [1000, 2000, 5000, 10000, 20000, 50000];
+  redondeos.forEach(r => {
+    const redondeado = Math.ceil(total / r) * r;
+    if (redondeado > total && !valores.includes(redondeado)) {
+      valores.push(redondeado);
+    }
+  });
+  
+  valores.sort((a, b) => a - b);
+  
+  container.innerHTML = valores.slice(0, 6).map(v => {
+    return '<button class="pago-rapido-btn" onclick="setPagoRapido(' + v + ')">' + formatearMoneda(v) + '</button>';
+  }).join('');
+}
+
+function setPagoRapido(valor) {
+  document.getElementById('pagoRecibido').value = valor;
+  calcularDevuelta();
+}
+
+function calcularDevuelta() {
+  const total = carrito.reduce((sum, item) => sum + (item.precio * item.cantidad), 0);
+  const recibido = parseFloat(document.getElementById('pagoRecibido').value) || 0;
+  const devuelta = Math.max(0, recibido - total);
+  
+  document.getElementById('pagoDevuelta').value = formatearMoneda(devuelta);
+  
+  const btnConfirmar = document.getElementById('btnConfirmarVenta');
+  btnConfirmar.disabled = recibido < total;
+}
+
+// ===============================================
+// PROCESAR VENTA
+// ===============================================
+
+function confirmarVenta() {
+  const total = carrito.reduce((sum, item) => sum + (item.precio * item.cantidad), 0);
+  const recibido = parseFloat(document.getElementById('pagoRecibido').value) || 0;
+  
+  if (recibido < total) {
+    mostrarToast('El monto recibido es insuficiente', 'error');
+    return;
+  }
+  
+  const datosVenta = {
+    items: carrito,
+    nombreCliente: document.getElementById('nombreCliente').value || 'Cliente General',
+    subtotal: total,
+    total: total,
+    metodoPago: metodoPagoSeleccionado,
+    totalRecibido: recibido,
+    devuelta: recibido - total
+  };
+  
+  document.getElementById('btnConfirmarVenta').disabled = true;
+  document.getElementById('btnConfirmarVenta').innerHTML = '<span class="material-icons-round">hourglass_empty</span><span>Procesando...</span>';
+  
+  google.script.run
+    .withSuccessHandler(function(resultado) {
+      if (resultado.success) {
+        cerrarModalPago();
+        mostrarModalExito(resultado.numeroFactura);
+        carrito = [];
+        renderizarCarrito();
+        actualizarTotales();
+        cargarProductos();
+      } else {
+        mostrarToast(resultado.message, 'error');
+      }
+      resetearBotonConfirmar();
+    })
+    .withFailureHandler(function(error) {
+      mostrarToast('Error al procesar la venta', 'error');
+      console.error(error);
+      resetearBotonConfirmar();
+    })
+    .guardarVenta(datosVenta);
+}
+
+function resetearBotonConfirmar() {
+  const btn = document.getElementById('btnConfirmarVenta');
+  btn.disabled = false;
+  btn.innerHTML = '<span class="material-icons-round">check_circle</span><span>Confirmar Venta</span>';
+}
+
+function mostrarModalExito(numeroFactura) {
+  document.getElementById('exitoFactura').textContent = numeroFactura;
+  document.getElementById('modalExito').classList.add('active');
+}
+
+function cerrarModalExito() {
+  document.getElementById('modalExito').classList.remove('active');
+  obtenerNumeroFactura();
+}
+
+// ===============================================
+// NAVEGACIÓN
+// ===============================================
+
+function cambiarVista(vista) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  
+  document.getElementById('view-' + vista).classList.add('active');
+  document.querySelector('[data-view="' + vista + '"]').classList.add('active');
+  
+  if (vista === 'dashboard') {
+    cargarDashboard();
+  } else if (vista === 'historial') {
+    cargarHistorial();
+  }
+}
+
+// ===============================================
+// DASHBOARD
+// ===============================================
+
+function cargarDashboard() {
+  const hoy = new Date();
+  document.getElementById('dashboardDate').textContent = hoy.toLocaleDateString('es-CO', { 
+    weekday: 'long', 
+    year: 'numeric', 
+    month: 'long', 
+    day: 'numeric' 
+  });
+  
+  google.script.run
+    .withSuccessHandler(function(data) {
+      document.getElementById('statTotalVentas').textContent = formatearMoneda(data.totalVentas);
+      document.getElementById('statCantidadVentas').textContent = data.cantidadVentas;
+      document.getElementById('statEfectivo').textContent = formatearMoneda(data.efectivo);
+      document.getElementById('statNequi').textContent = formatearMoneda(data.nequi);
+    })
+    .withFailureHandler(function(error) {
+      console.error('Error cargando dashboard:', error);
+    })
+    .getResumenVentasHoy();
+}
+
+function buscarVenta() {
+  const termino = document.getElementById('busquedaVenta').value.trim();
+  if (!termino) {
+    mostrarToast('Ingresa un término de búsqueda', 'warning');
+    return;
+  }
+  mostrarToast('Función de búsqueda en desarrollo', 'info');
+}
+
+// ===============================================
+// HISTORIAL
+// ===============================================
+
+function cargarHistorial() {
+  google.script.run
+    .withSuccessHandler(function(ventas) {
+      renderizarHistorial(ventas);
+    })
+    .withFailureHandler(function(error) {
+      console.error('Error cargando historial:', error);
+    })
+    .getHistorialVentas(50);
+}
+
+function renderizarHistorial(ventas) {
+  const tbody = document.getElementById('historialBody');
+  
+  if (!ventas || ventas.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;">No hay ventas registradas</td></tr>';
+    return;
+  }
+  
+  tbody.innerHTML = ventas.map(v => {
+    return '<tr>' +
+      '<td><strong>' + v.numeroFactura + '</strong></td>' +
+      '<td>' + v.fecha + '</td>' +
+      '<td>' + v.cliente + '</td>' +
+      '<td>' + formatearMoneda(v.total) + '</td>' +
+      '<td>' + v.metodoPago + '</td>' +
+      '<td><span class="estado completada">' + v.estado + '</span></td>' +
+    '</tr>';
+  }).join('');
+}
+
+// ===============================================
+// PRODUCTOS - AGREGAR NUEVO
+// ===============================================
+
+function abrirModalProducto() {
+  document.getElementById('nuevoNombre').value = '';
+  document.getElementById('nuevoSKU').value = '';
+  document.getElementById('nuevoCategoria').value = 'Helados';
+  document.getElementById('nuevoPrecio').value = '';
+  document.getElementById('nuevoStock').value = '';
+  document.getElementById('modalProducto').classList.add('active');
+}
+
+function cerrarModalProducto() {
+  document.getElementById('modalProducto').classList.remove('active');
+}
+
+function guardarNuevoProducto() {
+  const nombre = document.getElementById('nuevoNombre').value.trim();
+  const sku = document.getElementById('nuevoSKU').value.trim();
+  const categoria = document.getElementById('nuevoCategoria').value;
+  const precio = parseFloat(document.getElementById('nuevoPrecio').value) || 0;
+  const stock = parseInt(document.getElementById('nuevoStock').value) || 0;
+  
+  if (!nombre || !sku) {
+    mostrarToast('Complete todos los campos requeridos', 'warning');
+    return;
+  }
+  
+  const producto = {
+    nombre: nombre,
+    sku: sku,
+    categoria: categoria,
+    precio: precio,
+    stock: stock,
+    imagen: '🍨'
+  };
+  
+  google.script.run
+    .withSuccessHandler(function(resultado) {
+      if (resultado.success) {
+        mostrarToast('Producto agregado exitosamente', 'success');
+        cerrarModalProducto();
+        cargarProductos();
+      } else {
+        mostrarToast(resultado.message, 'error');
+      }
+    })
+    .withFailureHandler(function(error) {
+      mostrarToast('Error al guardar producto', 'error');
+      console.error(error);
+    })
+    .agregarProducto(producto);
+}
+
+// ===============================================
+// UTILIDADES
+// ===============================================
+
+function formatearMoneda(valor) {
+  return '$' + Math.round(valor).toLocaleString('es-CO');
+}
+
+function mostrarToast(mensaje, tipo) {
+  const toast = document.getElementById('toast');
+  const iconos = {
+    'success': 'check_circle',
+    'error': 'error',
+    'warning': 'warning',
+    'info': 'info'
+  };
+  
+  toast.className = 'toast ' + (tipo || 'info');
+  toast.querySelector('.toast-icon').textContent = iconos[tipo] || 'info';
+  toast.querySelector('.toast-message').textContent = mensaje;
+  toast.classList.add('show');
+  
+  setTimeout(() => {
+    toast.classList.remove('show');
+  }, 3000);
+}
+</script>
