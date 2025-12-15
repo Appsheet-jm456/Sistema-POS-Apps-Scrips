@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&family=Fredoka+One&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+  <?!= include('Styles'); ?>
+</head>
+<body>
+  <!-- Loader -->
+  <div id="loader" class="loader-overlay">
+    <div class="loader-content">
+      <div class="ice-cream-loader">
+        <div class="scoop scoop-1"></div>
+        <div class="scoop scoop-2"></div>
+        <div class="scoop scoop-3"></div>
+        <div class="cone"></div>
+      </div>
+      <p class="loader-text">Cargando deliciosos helados...</p>
+    </div>
+  </div>
+
+  <!-- Main Container -->
+  <div class="app-container">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <img src="https://i.postimg.cc/Hn75RzrG/Diseno-sin-titulo.png" alt="Break Back" class="logo">
+        <h1 class="brand-name">Break Back</h1>
+        <p class="brand-tagline">Heladería Artesanal</p>
+      </div>
+      
+      <nav class="sidebar-nav">
+        <button class="nav-btn active" data-view="pos" onclick="cambiarVista('pos')">
+          <span class="material-icons-round">point_of_sale</span>
+          <span>Punto de Venta</span>
+        </button>
+        <button class="nav-btn" data-view="dashboard" onclick="cambiarVista('dashboard')">
+          <span class="material-icons-round">dashboard</span>
+          <span>Dashboard</span>
+        </button>
+        <button class="nav-btn" data-view="historial" onclick="cambiarVista('historial')">
+          <span class="material-icons-round">receipt_long</span>
+          <span>Historial</span>
+        </button>
+        <button class="nav-btn" data-view="productos" onclick="cambiarVista('productos')">
+          <span class="material-icons-round">inventory_2</span>
+          <span>Productos</span>
+        </button>
+      </nav>
+      
+      <div class="sidebar-footer">
+        <div class="store-info">
+          <span class="material-icons-round">location_on</span>
+          <span>Calle 98c #22-17</span>
+        </div>
+        <div class="current-time" id="currentTime"></div>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- POS View -->
+      <section id="view-pos" class="view active">
+        <div class="pos-grid">
+          <!-- Products Section -->
+          <div class="products-section">
+            <!-- Search Bar -->
+            <div class="search-container">
+              <div class="search-box">
+                <span class="material-icons-round">search</span>
+                <input type="text" id="searchInput" placeholder="Buscar producto..." oninput="filtrarProductos()">
+                <button class="clear-search" onclick="limpiarBusqueda()">
+                  <span class="material-icons-round">close</span>
+                </button>
+              </div>
+              <div class="scanner-box">
+                <span class="material-icons-round">qr_code_scanner</span>
+                <input type="text" id="skuInput" placeholder="Escanear SKU..." onkeypress="escanearSKU(event)">
+              </div>
+            </div>
+
+            <!-- Categories -->
+            <div class="categories-container" id="categoriesContainer">
+              <button class="category-btn active" data-category="todos" onclick="filtrarCategoria('todos')">
+                <span class="material-icons-round">apps</span>
+                <span>Todos</span>
+              </button>
+            </div>
+
+            <!-- Products Grid -->
+            <div class="products-grid" id="productsGrid">
+              <!-- Products will be loaded here -->
+            </div>
+          </div>
+
+          <!-- Cart Section -->
+          <div class="cart-section">
+            <div class="cart-header">
+              <h2><span class="material-icons-round">shopping_cart</span> Carrito de Compra</h2>
+              <button class="btn-clear-cart" onclick="limpiarCarrito()" title="Vaciar carrito">
+                <span class="material-icons-round">delete_sweep</span>
+              </button>
+            </div>
+
+            <div class="cart-items" id="cartItems">
+              <div class="cart-empty">
+                <span class="material-icons-round">shopping_basket</span>
+                <p>El carrito está vacío</p>
+                <span>Agrega productos para comenzar</span>
+              </div>
+            </div>
+
+            <div class="cart-summary">
+              <div class="summary-row">
+                <span>Subtotal:</span>
+                <span id="subtotal">$0</span>
+              </div>
+              <div class="summary-row total">
+                <span>Total:</span>
+                <span id="total">$0</span>
+              </div>
+            </div>
+
+            <button class="btn-checkout" id="btnCheckout" onclick="abrirModalPago()" disabled>
+              <span class="material-icons-round">payments</span>
+              <span>Procesar Pago</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Dashboard View -->
+      <section id="view-dashboard" class="view">
+        <div class="dashboard-header">
+          <h2>Dashboard de Ventas</h2>
+          <p id="dashboardDate"></p>
+        </div>
+        
+        <div class="stats-grid">
+          <div class="stat-card stat-total">
+            <div class="stat-icon">
+              <span class="material-icons-round">account_balance_wallet</span>
+            </div>
+            <div class="stat-info">
+              <h3>Ventas del Día</h3>
+              <p class="stat-value" id="statTotalVentas">$0</p>
+            </div>
+          </div>
+          
+          <div class="stat-card stat-count">
+            <div class="stat-icon">
+              <span class="material-icons-round">receipt</span>
+            </div>
+            <div class="stat-info">
+              <h3>Transacciones</h3>
+              <p class="stat-value" id="statCantidadVentas">0</p>
+            </div>
+          </div>
+          
+          <div class="stat-card stat-cash">
+            <div class="stat-icon">
+              <span class="material-icons-round">payments</span>
+            </div>
+            <div class="stat-info">
+              <h3>Efectivo</h3>
+              <p class="stat-value" id="statEfectivo">$0</p>
+            </div>
+          </div>
+          
+          <div class="stat-card stat-nequi">
+            <div class="stat-icon">
+              <span class="material-icons-round">smartphone</span>
+            </div>
+            <div class="stat-info">
+              <h3>Nequi</h3>
+              <p class="stat-value" id="statNequi">$0</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="dashboard-search">
+          <h3><span class="material-icons-round">search</span> Buscar Venta</h3>
+          <div class="search-ventas">
+            <input type="text" id="busquedaVenta" placeholder="Número de factura o nombre de cliente...">
+            <button onclick="buscarVenta()">
+              <span class="material-icons-round">search</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Historial View -->
+      <section id="view-historial" class="view">
+        <div class="historial-header">
+          <h2><span class="material-icons-round">history</span> Historial de Ventas</h2>
+          <button class="btn-refresh" onclick="cargarHistorial()">
+            <span class="material-icons-round">refresh</span>
+          </button>
+        </div>
+        
+        <div class="historial-table-container">
+          <table class="historial-table">
+            <thead>
+              <tr>
+                <th>Factura</th>
+                <th>Fecha</th>
+                <th>Cliente</th>
+                <th>Total</th>
+                <th>Método</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody id="historialBody">
+              <!-- Sales history will be loaded here -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Productos View -->
+      <section id="view-productos" class="view">
+        <div class="productos-header">
+          <h2><span class="material-icons-round">inventory_2</span> Gestión de Productos</h2>
+          <button class="btn-add-product" onclick="abrirModalProducto()">
+            <span class="material-icons-round">add</span>
+            <span>Nuevo Producto</span>
+          </button>
+        </div>
+        
+        <div class="productos-table-container">
+          <table class="productos-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Producto</th>
+                <th>SKU</th>
+                <th>Categoría</th>
+                <th>Precio</th>
+                <th>Stock</th>
+              </tr>
+            </thead>
+            <tbody id="productosBody">
+              <!-- Products will be loaded here -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Payment Modal -->
+  <div id="modalPago" class="modal">
+    <div class="modal-content modal-pago">
+      <div class="modal-header">
+        <h2><span class="material-icons-round">receipt_long</span> Procesar Pago</h2>
+        <button class="modal-close" onclick="cerrarModalPago()">
+          <span class="material-icons-round">close</span>
+        </button>
+      </div>
+      
+      <div class="modal-body">
+        <div class="factura-preview">
+          <div class="factura-header-preview">
+            <img src="https://i.postimg.cc/Hn75RzrG/Diseno-sin-titulo.png" alt="Logo" class="factura-logo">
+            <h3>Heladería Break Back</h3>
+            <p>Calle 98c #22-17</p>
+            <p class="factura-numero" id="facturaNumero">FAC-0001</p>
+          </div>
+          
+          <div class="factura-cliente">
+            <label>Nombre del Cliente:</label>
+            <input type="text" id="nombreCliente" placeholder="Cliente General">
+          </div>
+          
+          <div class="factura-items" id="facturaItems">
+            <!-- Items will be loaded here -->
+          </div>
+          
+          <div class="factura-totales">
+            <div class="factura-row">
+              <span>Subtotal:</span>
+              <span id="facturaSubtotal">$0</span>
+            </div>
+            <div class="factura-row factura-total">
+              <span>TOTAL:</span>
+              <span id="facturaTotal">$0</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="pago-form">
+          <div class="metodo-pago">
+            <label>Método de Pago:</label>
+            <div class="metodo-btns">
+              <button class="metodo-btn active" data-metodo="Efectivo" onclick="seleccionarMetodo('Efectivo')">
+                <span class="material-icons-round">payments</span>
+                <span>Efectivo</span>
+              </button>
+              <button class="metodo-btn" data-metodo="Nequi" onclick="seleccionarMetodo('Nequi')">
+                <span class="material-icons-round">smartphone</span>
+                <span>Nequi</span>
+              </button>
+            </div>
+          </div>
+          
+          <div class="pago-valores">
+            <div class="pago-campo">
+              <label>Total a Pagar:</label>
+              <input type="text" id="pagoTotal" readonly>
+            </div>
+            <div class="pago-campo">
+              <label>Total Recibido:</label>
+              <input type="number" id="pagoRecibido" oninput="calcularDevuelta()" placeholder="0">
+            </div>
+            <div class="pago-campo devuelta">
+              <label>Devuelta:</label>
+              <input type="text" id="pagoDevuelta" readonly value="$0">
+            </div>
+          </div>
+
+          <div class="pago-rapido" id="pagoRapido">
+            <label>Pago Rápido:</label>
+            <div class="pago-rapido-btns" id="pagoRapidoBtns">
+              <!-- Quick payment buttons will be generated -->
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="modal-footer">
+        <button class="btn-cancelar" onclick="cerrarModalPago()">
+          <span class="material-icons-round">close</span>
+          <span>Cancelar</span>
+        </button>
+        <button class="btn-confirmar" id="btnConfirmarVenta" onclick="confirmarVenta()">
+          <span class="material-icons-round">check_circle</span>
+          <span>Confirmar Venta</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Success Modal -->
+  <div id="modalExito" class="modal">
+    <div class="modal-content modal-exito">
+      <div class="exito-icon">
+        <span class="material-icons-round">check_circle</span>
+      </div>
+      <h2>¡Venta Exitosa!</h2>
+      <p id="exitoMensaje">La venta ha sido procesada correctamente</p>
+      <p class="exito-factura" id="exitoFactura">FAC-0001</p>
+      <button class="btn-nueva-venta" onclick="cerrarModalExito()">
+        <span class="material-icons-round">add_shopping_cart</span>
+        <span>Nueva Venta</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Add Product Modal -->
+  <div id="modalProducto" class="modal">
+    <div class="modal-content modal-producto">
+      <div class="modal-header">
+        <h2><span class="material-icons-round">add_box</span> Nuevo Producto</h2>
+        <button class="modal-close" onclick="cerrarModalProducto()">
+          <span class="material-icons-round">close</span>
+        </button>
+      </div>
+      
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Nombre del Producto:</label>
+          <input type="text" id="nuevoNombre" placeholder="Ej: Helado de Vainilla">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>SKU:</label>
+            <input type="text" id="nuevoSKU" placeholder="Ej: HEL001">
+          </div>
+          <div class="form-group">
+            <label>Categoría:</label>
+            <select id="nuevoCategoria">
+              <option value="Helados">Helados</option>
+              <option value="Bebidas">Bebidas</option>
+              <option value="Postres">Postres</option>
+              <option value="Toppings">Toppings</option>
+              <option value="Otros">Otros</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Precio:</label>
+            <input type="number" id="nuevoPrecio" placeholder="0">
+          </div>
+          <div class="form-group">
+            <label>Stock:</label>
+            <input type="number" id="nuevoStock" placeholder="0">
+          </div>
+        </div>
+      </div>
+      
+      <div class="modal-footer">
+        <button class="btn-cancelar" onclick="cerrarModalProducto()">Cancelar</button>
+        <button class="btn-confirmar" onclick="guardarNuevoProducto()">Guardar Producto</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="toast">
+    <span class="material-icons-round toast-icon">info</span>
+    <span class="toast-message"></span>
+  </div>
+
+  <?!= include('JavaScript'); ?>
+</body>
+</html>
